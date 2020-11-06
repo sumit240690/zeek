@@ -572,7 +572,7 @@ static void BuildJSON(threading::formatter::JSON::NullDoubleWriter& writer, Val*
 			else
 				writer.StartObject();
 
-			detail::HashKey* k;
+			std::unique_ptr<detail::HashKey> k;
 			TableEntryVal* entry;
 
 			for ( const auto& te : *table )
@@ -581,7 +581,6 @@ static void BuildJSON(threading::formatter::JSON::NullDoubleWriter& writer, Val*
 				k = te.GetHashKey();
 
 				auto lv = tval->RecreateIndex(*k);
-				delete k;
 				Val* entry_key = lv->Length() == 1 ? lv->Idx(0).get() : lv.get();
 
 				if ( tval->GetType()->IsSet() )
@@ -1654,11 +1653,10 @@ bool TableVal::AddTo(Val* val, bool is_first_init, bool propagate_ops) const
 	const PDict<TableEntryVal>* tbl = AsTable();
 	for ( const auto& tble : *tbl )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 		auto* v = tble.GetValue<TableEntryVal*>();
-		std::unique_ptr<detail::HashKey> hk{k};
 
-		if ( is_first_init && t->AsTable()->Lookup(k) )
+		if ( is_first_init && t->AsTable()->Lookup(k.get()) )
 			{
 			auto key = table_hash->RecoverVals(*k);
 			// ### Shouldn't complain if their values are equal.
@@ -1668,12 +1666,12 @@ bool TableVal::AddTo(Val* val, bool is_first_init, bool propagate_ops) const
 
 		if ( type->IsSet() )
 			{
-			if ( ! t->Assign(v->GetVal(), std::move(hk), nullptr) )
+			if ( ! t->Assign(v->GetVal(), std::move(k), nullptr) )
 				 return false;
 			}
 		else
 			{
-			if ( ! t->Assign(nullptr, std::move(hk), v->GetVal()) )
+			if ( ! t->Assign(nullptr, std::move(k), v->GetVal()) )
 				 return false;
 			}
 		}
@@ -1705,9 +1703,8 @@ bool TableVal::RemoveFrom(Val* val) const
 		// OTOH, they are both the same type, so as long as
 		// we don't have hash keys that are keyed per dictionary,
 		// it should work ...
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 		t->Remove(*k);
-		delete k;
 		}
 
 	return true;
@@ -1732,14 +1729,12 @@ TableValPtr TableVal::Intersection(const TableVal& tv) const
 	const PDict<TableEntryVal>* tbl = AsTable();
 	for ( const auto& tble : *tbl )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 
 		// Here we leverage the same assumption about consistent
 		// hashes as in TableVal::RemoveFrom above.
-		if ( t0->Lookup(k) )
-			t2->Insert(k, new TableEntryVal(nullptr));
-
-		delete k;
+		if ( t0->Lookup(k.get()) )
+			t2->Insert(k.get(), new TableEntryVal(nullptr));
 		}
 
 	return result;
@@ -1755,17 +1750,12 @@ bool TableVal::EqualTo(const TableVal& tv) const
 
 	for ( const auto& tble : *t0 )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 
 		// Here we leverage the same assumption about consistent
 		// hashes as in TableVal::RemoveFrom above.
-		if ( ! t1->Lookup(k) )
-			{
-			delete k;
+		if ( ! t1->Lookup(k.get()) )
 			return false;
-			}
-
-		delete k;
 		}
 
 	return true;
@@ -1781,17 +1771,12 @@ bool TableVal::IsSubsetOf(const TableVal& tv) const
 
 	for ( const auto& tble : *t0 )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 
 		// Here we leverage the same assumption about consistent
 		// hashes as in TableVal::RemoveFrom above.
-		if ( ! t1->Lookup(k) )
-			{
-			delete k;
+		if ( ! t1->Lookup(k.get()) )
 			return false;
-			}
-
-		delete k;
 		}
 
 	return true;
@@ -2328,7 +2313,7 @@ ListValPtr TableVal::ToListVal(TypeTag t) const
 	const PDict<TableEntryVal>* tbl = AsTable();
 	for ( const auto& tble : *tbl )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 		auto index = table_hash->RecoverVals(*k);
 
 		if ( t == TYPE_ANY )
@@ -2341,8 +2326,6 @@ ListValPtr TableVal::ToListVal(TypeTag t) const
 
 			l->Append(index->Idx(0));
 			}
-
-		delete k;
 		}
 
 	return l;
@@ -2401,7 +2384,7 @@ void TableVal::Describe(ODesc* d) const
 		if ( iter == tbl->end() )
 			reporter->InternalError("hash table underflow in TableVal::Describe");
 
-		detail::HashKey* k = iter->GetHashKey();
+		auto k = iter->GetHashKey();
 		auto* v = iter->GetValue<TableEntryVal*>();
 
 		auto vl = table_hash->RecoverVals(*k);
@@ -2427,8 +2410,6 @@ void TableVal::Describe(ODesc* d) const
 			}
 
 		vl->Describe(d);
-
-		delete k;
 
 		if ( table_type->IsSet() )
 			{ // We're a set, not a table.
@@ -2553,7 +2534,7 @@ void TableVal::DoExpire(double t)
 	if ( ! expire_iterator )
 		expire_iterator = tbl->begin_robust();
 
-	detail::HashKey* k = nullptr;
+	std::unique_ptr<detail::HashKey> k = nullptr;
 	TableEntryVal* v = nullptr;
 	TableEntryVal* v_saved = nullptr;
 	bool modified = false;
@@ -2586,12 +2567,11 @@ void TableVal::DoExpire(double t)
 				// function modified or deleted the table
 				// value, so look it up again.
 				v_saved = v;
-				v = tbl->Lookup(k);
+				v = tbl->Lookup(k.get());
 
 				if ( ! v )
 					{ // user-provided function deleted it
 					v = v_saved;
-					delete k;
 					continue;
 					}
 
@@ -2600,7 +2580,6 @@ void TableVal::DoExpire(double t)
 					// User doesn't want us to expire
 					// this now.
 					v->SetExpireAccess(run_state::network_time - timeout + secs);
-					delete k;
 					continue;
 					}
 
@@ -2614,7 +2593,7 @@ void TableVal::DoExpire(double t)
 					reporter->InternalWarning("index not in prefix table");
 				}
 
-			tbl->RemoveEntry(k);
+			tbl->RemoveEntry(k.get());
 			if ( change_func )
 				{
 				if ( ! idx )
@@ -2626,8 +2605,6 @@ void TableVal::DoExpire(double t)
 			delete v;
 			modified = true;
 			}
-
-		delete k;
 		}
 
 	if ( modified )
@@ -2741,18 +2718,16 @@ ValPtr TableVal::DoClone(CloneState* state)
 	const PDict<TableEntryVal>* tbl = AsTable();
 	for ( const auto& tble : *tbl )
 		{
-		detail::HashKey* key = tble.GetHashKey();
+		auto key = tble.GetHashKey();
 		auto* val = tble.GetValue<TableEntryVal*>();
 		TableEntryVal* nval = val->Clone(state);
-		tv->AsNonConstTable()->Insert(key, nval);
+		tv->AsNonConstTable()->Insert(key.get(), nval);
 
 		if ( subnets )
 			{
 			auto idx = RecreateIndex(*key);
 			tv->subnets->Insert(idx.get(), nval);
 			}
-
-		delete key;
 		}
 
 	tv->attrs = attrs;
@@ -2833,11 +2808,10 @@ TableVal::ParseTimeTableState TableVal::DumpTableState()
 	const PDict<TableEntryVal>* tbl = AsTable();
 	for ( const auto& tble : *tbl )
 		{
-		detail::HashKey* key = tble.GetHashKey();
+		auto key = tble.GetHashKey();
 		auto* val = tble.GetValue<TableEntryVal*>();
 
 		rval.emplace_back(RecreateIndex(*key), val->GetVal());
-		delete key;
 		}
 
 	RemoveAll();

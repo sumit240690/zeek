@@ -79,11 +79,10 @@ void Reporter::InitOptions()
 
 		for ( const auto& wle : *wl_table )
 			{
-			detail::HashKey* k = wle.GetHashKey();
+			auto k = wle.GetHashKey();
 			auto index = wl_val->RecreateIndex(*k);
 			std::string key = index->Idx(0)->AsString()->CheckString();
 			set->emplace(move(key));
-			delete k;
 			}
 		};
 

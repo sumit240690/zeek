@@ -277,14 +277,13 @@ bool Manager::CreateStream(Stream* info, RecordVal* description)
 		auto* info_config_table = info->config->AsTable();
 		for ( const auto& icte : *info_config_table )
 			{
-			detail::HashKey* k = icte.GetHashKey();
+			auto k = icte.GetHashKey();
 			auto* v = icte.GetValue<TableEntryVal*>();
 
 			auto index = info->config->RecreateIndex(*k);
 			string key = index->Idx(0)->AsString()->CheckString();
 			string value = v->GetVal()->AsString()->CheckString();
 			rinfo.config.insert(std::make_pair(util::copy_string(key.c_str()), util::copy_string(value.c_str())));
-			delete k;
 			}
 		}
 
@@ -1345,7 +1344,7 @@ void Manager::EndCurrentSend(ReaderFrontend* reader)
 	// lastdict contains all deleted entries and should be empty apart from that
 	for ( auto it = stream->lastDict->begin_robust(); *it != stream->lastDict->end_robust(); ++(*it) )
 		{
-		zeek::detail::HashKey *lastDictIdxKey = (*it)->GetHashKey();
+		auto lastDictIdxKey = (*it)->GetHashKey();
 		InputHash* ih = (*it)->GetValue<InputHash*>();
 
 		ValPtr val;
@@ -1374,8 +1373,7 @@ void Manager::EndCurrentSend(ReaderFrontend* reader)
 				{
 				// Keep it. Hence - we quit and simply go to the next entry of lastDict
 				// ah well - and we have to add the entry to currDict...
-				stream->currDict->Insert(lastDictIdxKey, stream->lastDict->RemoveEntry(lastDictIdxKey));
-				delete lastDictIdxKey;
+				stream->currDict->Insert(lastDictIdxKey.get(), stream->lastDict->RemoveEntry(lastDictIdxKey.get()));
 				continue;
 				}
 			}
@@ -1391,8 +1389,7 @@ void Manager::EndCurrentSend(ReaderFrontend* reader)
 			}
 
 		stream->tab->Remove(*ih->idxkey);
-		stream->lastDict->Remove(lastDictIdxKey); // delete in next line
-		delete lastDictIdxKey;
+		stream->lastDict->Remove(lastDictIdxKey.get()); // delete in next line
 		delete ih;
 		}
 

@@ -185,13 +185,12 @@ function Reporter::set_weird_sampling_whitelist%(weird_sampling_whitelist: strin
 
 	for ( const auto& tble : *wl_table )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 		auto* v = tble.GetValue<TableEntryVal*>();
 
 		auto index = wl_val->RecreateIndex(*k);
 		string key = index->Idx(0)->AsString()->CheckString();
 		whitelist_set.emplace(move(key));
-		delete k;
 		}
 	reporter->SetWeirdSamplingWhitelist(std::move(whitelist_set));
 	return zeek::val_mgr->True();
@@ -224,11 +223,10 @@ function Reporter::set_weird_sampling_global_list%(weird_sampling_global_list: s
 
 	for ( const auto& tble : *wl_table )
 		{
-		detail::HashKey* k = tble.GetHashKey();
+		auto k = tble.GetHashKey();
 		auto index = wl_val->RecreateIndex(*k);
 		string key = index->Idx(0)->AsString()->CheckString();
 		global_list_set.emplace(move(key));
-		delete k;
 		}
 	reporter->SetWeirdSamplingGlobalList(std::move(global_list_set));
 	return zeek::val_mgr->True();

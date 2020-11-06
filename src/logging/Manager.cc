@@ -892,14 +892,13 @@ bool Manager::Write(EnumVal* id, RecordVal* columns_arg)
 			auto* filter_config_table = filter->config->AsTable();
 			for ( const auto& fcte : *filter_config_table )
 				{
-				detail::HashKey* k = fcte.GetHashKey();
+				auto k = fcte.GetHashKey();
 				auto* v = fcte.GetValue<TableEntryVal*>();
 
 				auto index = filter->config->RecreateIndex(*k);
 				string key = index->Idx(0)->AsString()->CheckString();
 				string value = v->GetVal()->AsString()->CheckString();
 				info->config.insert(std::make_pair(util::copy_string(key.c_str()), util::copy_string(value.c_str())));
-				delete k;
 				}
 
 			// CreateWriter() will set the other fields in info.

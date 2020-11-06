@@ -125,10 +125,13 @@ public:
 		}
 
 	const char* GetKey() const { return key_size <= 8 ? key_here : key; }
-	detail::HashKey* GetHashKey() const { return new detail::HashKey(GetKey(), key_size, hash); }
+	std::unique_ptr<detail::HashKey> GetHashKey() const
+		{
+		return std::make_unique<detail::HashKey>(GetKey(), key_size, hash, true);
+		}
 
 	template <typename T>
-	T GetValue() const { return reinterpret_cast<T>(value); }
+	T GetValue() const { return static_cast<T>(value); }
 
 	bool Equal(const char* arg_key, int arg_key_size, hash_t arg_hash) const
 		{//only 40-bit hash comparison.
@@ -153,10 +156,8 @@ public:
 	using reference = detail::DictEntry&;
 	using pointer = detail::DictEntry*;
 	using difference_type = std::ptrdiff_t;
-	using iterator_category = std::bidirectional_iterator_tag;
+	using iterator_category = std::forward_iterator_tag;
 
-	DictIterator() = default;
-	DictIterator(const Dictionary* d, detail::DictEntry* begin, detail::DictEntry* end);
 	~DictIterator();
 
 	reference operator*() { return *curr; }
@@ -169,6 +170,10 @@ public:
 	bool operator!=( const DictIterator& that ) const { return !(*this == that); }
 
 private:
+	friend class Dictionary;
+
+	DictIterator() = default;
+	DictIterator(const Dictionary* d, detail::DictEntry* begin, detail::DictEntry* end);
 
 	Dictionary* dict = nullptr;
 	detail::DictEntry* curr = nullptr;
@@ -181,15 +186,11 @@ public:
 	using reference = detail::DictEntry&;
 	using pointer = detail::DictEntry*;
 	using difference_type = std::ptrdiff_t;
-	using iterator_category = std::bidirectional_iterator_tag;
+	using iterator_category = std::forward_iterator_tag;
 
 	RobustDictIterator() : curr(nullptr) {}
 	RobustDictIterator(Dictionary* d);
  	~RobustDictIterator();
-
-	void Complete();
-	bool Active() { return inserted != nullptr; }
-	std::shared_ptr<RobustDictIterator> GetPtr() { return shared_from_this(); }
 
 	reference operator*() { return curr; }
 	pointer operator->() { return &curr; }
@@ -200,11 +201,16 @@ public:
 	bool operator==( const RobustDictIterator& that ) const { return curr == that.curr; }
 	bool operator!=( const RobustDictIterator& that ) const { return !(*this == that); }
 
-	// Tracks the new entries inserted while iterating. Only used for robust cookies.
+private:
+	friend class Dictionary;
+
+	void Complete();
+
+	// Tracks the new entries inserted while iterating.
 	std::vector<detail::DictEntry>* inserted = nullptr;
 
 	// Tracks the entries already visited but were moved across the next iteration
-	// point due to an insertion. Only used for robust cookies.
+	// point due to an insertion.
 	std::vector<detail::DictEntry>* visited = nullptr;
 
 	detail::DictEntry curr;
@@ -295,11 +301,11 @@ public:
 	//
 	// If return_hash is true, a HashKey for the entry is returned in h,
 	// which should be delete'd when no longer needed.
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	IterCookie* InitForIteration() const;
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	void* NextEntry(detail::HashKey*& h, IterCookie*& cookie, bool return_hash) const;
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	void StopIteration(IterCookie* cookie) const;
 
 	void SetDeleteFunc(dict_delete_func f)		{ delete_func = f; }
@@ -310,7 +316,7 @@ public:
 	// and (ii) we won't visit any still-unseen entries which are getting
 	// removed. (We don't get this for free, so only use it if
 	// necessary.)
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin_robust() and the standard-library-compatible version of iteration.")]]
 	void MakeRobustCookie(IterCookie* cookie);
 
 	// Remove all entries.
@@ -403,11 +409,11 @@ private:
 	void Init();
 
 	// Iteration
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	IterCookie* InitForIterationNonConst();
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	void* NextEntryNonConst(detail::HashKey*& h, IterCookie*& cookie, bool return_hash);
-	[[deprecated("Remove in v5.1. Use the standard-library-compatible version of iteration.")]]
+	[[deprecated("Remove in v5.1. Use begin() and the standard-library-compatible version of iteration.")]]
 	void StopIterationNonConst(IterCookie* cookie);
 
 	//Lookup
