@@ -384,10 +384,9 @@ TEST_CASE("dict new robust iteration")
 	dict.Insert(key, &val);
 	dict.Insert(key2, &val2);
 
+	{
 	int count = 0;
-
-	auto iter = dict.begin_robust();
-	RobustDictIterator& it = *iter;
+	auto it = dict.begin_robust();
 
 	for ( ; it != dict.end_robust(); ++it )
 		{
@@ -418,17 +417,16 @@ TEST_CASE("dict new robust iteration")
 		}
 
 	CHECK(count == 3);
-	count = 0;
+	}
 
-	iter.reset();
+	{
+	int count = 0;
+	auto it = dict.begin_robust();
 
-	iter = dict.begin_robust();
-	RobustDictIterator& it2 = *iter;
-
-	for ( ; it2 != dict.end_robust(); ++it2 )
+	for ( ; it != dict.end_robust(); ++it )
 		{
-		auto* v = it2->GetValue<uint32_t*>();
-		uint64_t k = *(uint32_t*) it2->GetKey();
+		auto* v = it->GetValue<uint32_t*>();
+		uint64_t k = *(uint32_t*) it->GetKey();
 
 		switch ( count )
 			{
@@ -450,9 +448,8 @@ TEST_CASE("dict new robust iteration")
 		count++;
 		}
 
-	iter.reset();
-
 	CHECK(count == 2);
+	}
 
 	delete key;
 	delete key2;
@@ -1122,7 +1119,7 @@ void Dictionary::AdjustOnInsert(IterCookie* c, const detail::DictEntry& entry, i
 
 #pragma GCC diagnostic pop
 
-void Dictionary::AdjustOnInsert(const std::shared_ptr<RobustDictIterator>& c, const detail::DictEntry& entry,
+void Dictionary::AdjustOnInsert(RobustDictIterator* c, const detail::DictEntry& entry,
                                 int insert_position, int last_affected_position)
 	{
 	if ( insert_position < c->next )
@@ -1254,7 +1251,7 @@ void Dictionary::AdjustOnRemove(IterCookie* c, const detail::DictEntry& entry, i
 
 #pragma GCC diagnostic pop
 
-void Dictionary::AdjustOnRemove(const std::shared_ptr<RobustDictIterator>& c, const detail::DictEntry& entry,
+void Dictionary::AdjustOnRemove(RobustDictIterator* c, const detail::DictEntry& entry,
                                 int position, int last_affected_position)
 	{
 	c->inserted->erase(std::remove(c->inserted->begin(), c->inserted->end(), entry), c->inserted->end());
@@ -1487,18 +1484,12 @@ DictIterator& DictIterator::operator++()
 
 
 
-std::shared_ptr<RobustDictIterator> Dictionary::MakeRobustIterator()
+RobustDictIterator Dictionary::MakeRobustIterator()
 	{
 	if ( ! iterators )
-		iterators = new std::vector<std::shared_ptr<RobustDictIterator>>;
+		iterators = new std::vector<RobustDictIterator*>;
 
-	auto iter = std::make_shared<RobustDictIterator>(this);
-	iterators->push_back(iter);
-
-	// Advance the iterator once so we're at the first position.
-	++(*iter);
-
-	return iter;
+	return { this };
 	}
 
 detail::DictEntry Dictionary::GetNextRobustIteration(RobustDictIterator* iter)
@@ -1556,10 +1547,59 @@ detail::DictEntry Dictionary::GetNextRobustIteration(RobustDictIterator* iter)
 
 RobustDictIterator::RobustDictIterator(Dictionary* d) : curr(nullptr), dict(d)
 	{
-	dict->num_iterators++;
 	next = -1;
 	inserted = new std::vector<detail::DictEntry>();
 	visited = new std::vector<detail::DictEntry>();
+
+	dict->num_iterators++;
+	dict->iterators->push_back(this);
+
+	// Advance the iterator one step so that we're at the first element.
+	curr = dict->GetNextRobustIteration(this);
+	}
+
+RobustDictIterator::RobustDictIterator(const RobustDictIterator& other) : curr(nullptr)
+	{
+	dict = nullptr;
+
+	if ( other.dict )
+		{
+		next = other.next;
+		inserted = new std::vector<detail::DictEntry>();
+		visited = new std::vector<detail::DictEntry>();
+
+		if ( other.inserted )
+			std::copy(other.inserted->begin(), other.inserted->end(), std::back_inserter(*inserted));
+
+		if ( other.visited)
+			std::copy(other.visited->begin(), other.visited->end(), std::back_inserter(*visited));
+
+		dict = other.dict;
+		dict->num_iterators++;
+		dict->iterators->push_back(this);
+
+		curr = other.curr;
+		}
+	}
+
+RobustDictIterator::RobustDictIterator(RobustDictIterator&& other) : curr(nullptr)
+	{
+	dict = nullptr;
+
+	if ( other.dict )
+		{
+		next = other.next;
+		inserted = other.inserted;
+		visited = other.visited;
+
+		dict = other.dict;
+		dict->iterators->push_back(this);
+		dict->iterators->erase(std::remove(dict->iterators->begin(), dict->iterators->end(), &other),
+		                       dict->iterators->end());
+		other.dict = nullptr;
+
+		curr = std::move(other.curr);
+		}
 	}
 
 RobustDictIterator::~RobustDictIterator()
@@ -1574,8 +1614,7 @@ void RobustDictIterator::Complete()
 		assert(dict->num_iterators > 0);
 		dict->num_iterators--;
 
-		dict->iterators->erase(std::remove(dict->iterators->begin(), dict->iterators->end(),
-		                                   shared_from_this()),
+		dict->iterators->erase(std::remove(dict->iterators->begin(), dict->iterators->end(), this),
 		                       dict->iterators->end());
 
 		delete inserted;

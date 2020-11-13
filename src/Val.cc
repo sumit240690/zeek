@@ -1434,6 +1434,7 @@ void TableVal::Init(TableTypePtr t)
 	table_type = std::move(t);
 	expire_func = nullptr;
 	expire_time = nullptr;
+	expire_iterator = nullptr;
 	timer = nullptr;
 	def_val = nullptr;
 
@@ -1455,6 +1456,7 @@ TableVal::~TableVal()
 	delete table_hash;
 	delete AsTable();
 	delete subnets;
+	delete expire_iterator;
 	}
 
 void TableVal::RemoveAll()
@@ -2532,7 +2534,10 @@ void TableVal::DoExpire(double t)
 		return;
 
 	if ( ! expire_iterator )
-		expire_iterator = tbl->begin_robust();
+		{
+		auto it = tbl->begin_robust();
+		expire_iterator = new RobustDictIterator(std::move(it));
+		}
 
 	std::unique_ptr<detail::HashKey> k = nullptr;
 	TableEntryVal* v = nullptr;
@@ -2612,6 +2617,7 @@ void TableVal::DoExpire(double t)
 
 	if ( (*expire_iterator) == tbl->end_robust() )
 		{
+		delete expire_iterator;
 		expire_iterator = nullptr;
 		InitTimer(zeek::detail::table_expire_interval);
 		}

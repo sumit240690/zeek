@@ -1342,10 +1342,10 @@ void Manager::EndCurrentSend(ReaderFrontend* reader)
 	auto* stream = static_cast<TableStream*>(i);
 
 	// lastdict contains all deleted entries and should be empty apart from that
-	for ( auto it = stream->lastDict->begin_robust(); *it != stream->lastDict->end_robust(); ++(*it) )
+	for ( auto it = stream->lastDict->begin_robust(); it != stream->lastDict->end_robust(); ++it )
 		{
-		auto lastDictIdxKey = (*it)->GetHashKey();
-		InputHash* ih = (*it)->GetValue<InputHash*>();
+		auto lastDictIdxKey = it->GetHashKey();
+		InputHash* ih = it->GetValue<InputHash*>();
 
 		ValPtr val;
 		ValPtr predidx;
