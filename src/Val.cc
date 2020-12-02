@@ -730,7 +730,7 @@ uint32_t PortVal::Mask(uint32_t port_num, TransportProto port_type)
 	}
 
 PortVal::PortVal(uint32_t p)
-	: UnsignedValImplementation(base_type(TYPE_PORT), bro_uint_t(p))
+	: Val(base_type(TYPE_PORT)), UnsignedValImplementation(bro_uint_t(p))
 	{
 	}
 

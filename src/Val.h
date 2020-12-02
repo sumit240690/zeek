@@ -139,11 +139,11 @@ public:
 #define UNDERLYING_ACCESSOR_DECL(ztype, ctype, name) \
 	ctype name() const;
 
-UNDERLYING_ACCESSOR_DECL(IntValImplementation, bro_int_t, AsInt)
+UNDERLYING_ACCESSOR_DECL(detail::IntValImplementation, bro_int_t, AsInt)
 UNDERLYING_ACCESSOR_DECL(BoolVal, bool, AsBool)
 UNDERLYING_ACCESSOR_DECL(EnumVal, int, AsEnum)
-UNDERLYING_ACCESSOR_DECL(UnsignedValImplementation, bro_uint_t, AsCount)
-UNDERLYING_ACCESSOR_DECL(DoubleValImplementation, double, AsDouble)
+UNDERLYING_ACCESSOR_DECL(detail::UnsignedValImplementation, bro_uint_t, AsCount)
+UNDERLYING_ACCESSOR_DECL(detail::DoubleValImplementation, double, AsDouble)
 UNDERLYING_ACCESSOR_DECL(TimeVal, double, AsTime)
 UNDERLYING_ACCESSOR_DECL(IntervalVal, double, AsInterval)
 UNDERLYING_ACCESSOR_DECL(AddrVal, const IPAddr&, AsAddr)
@@ -343,15 +343,15 @@ private:
 extern ValManager* val_mgr;
 
 
+namespace detail {
+
 // These are *internal* classes used to allow different publicly visible
 // classes to share the same low-level value (per Type::InternalType).
 // They may change or go away in the future.
 
-class IntValImplementation : public Val {
+class IntValImplementation {
 public:
-	IntValImplementation(TypePtr t, bro_int_t v)
-		: Val(std::move(t)), int_val(v)
-		{}
+	IntValImplementation(bro_int_t v) : int_val(v) {}
 
 	bro_int_t Get() const	{ return int_val; }
 
@@ -359,11 +359,9 @@ protected:
 	bro_int_t int_val;
 };
 
-class UnsignedValImplementation : public Val {
+class UnsignedValImplementation {
 public:
-	UnsignedValImplementation(TypePtr t, bro_uint_t v)
-		: Val(std::move(t)), uint_val(v)
-		{}
+	UnsignedValImplementation(bro_uint_t v) : uint_val(v) {}
 
 	bro_uint_t Get() const	{ return uint_val; }
 
@@ -371,11 +369,9 @@ protected:
 	bro_uint_t uint_val;
 };
 
-class DoubleValImplementation : public Val {
+class DoubleValImplementation {
 public:
-	DoubleValImplementation(TypePtr t, double v)
-		: Val(std::move(t)), double_val(v)
-		{}
+	DoubleValImplementation(double v) : double_val(v) {}
 
 	double Get() const	{ return double_val; }
 
@@ -383,21 +379,22 @@ protected:
 	double double_val;
 };
 
+} // namespace detail
 
-class IntVal final : public IntValImplementation {
+class IntVal final : public Val, public detail::IntValImplementation {
 public:
 	IntVal(bro_int_t v)
-		: IntValImplementation(base_type(TYPE_INT), v)
+		: Val(base_type(TYPE_INT)), detail::IntValImplementation(v)
 		{}
 
 	// No Get() method since in the current implementation the
 	// inherited one serves that role.
 };
 
-class BoolVal final : public IntValImplementation {
+class BoolVal final : public Val, public detail::IntValImplementation {
 public:
 	BoolVal(bro_int_t v)
-		: IntValImplementation(base_type(TYPE_BOOL), v)
+		: Val(base_type(TYPE_BOOL)), detail::IntValImplementation(v)
 		{}
 	BoolVal(bool b)
 		: BoolVal(bro_int_t(b))
@@ -406,19 +403,19 @@ public:
 	bool Get() const	{ return int_val; }
 };
 
-class CountVal : public UnsignedValImplementation {
+class CountVal : public Val, public detail::UnsignedValImplementation {
 public:
 	CountVal(bro_uint_t v)
-		: UnsignedValImplementation(base_type(TYPE_COUNT), v)
+		: Val(base_type(TYPE_COUNT)), detail::UnsignedValImplementation(v)
 		{}
 
 	// Same as for IntVal: no Get() method needed.
 };
 
-class DoubleVal : public DoubleValImplementation {
+class DoubleVal : public Val, public detail::DoubleValImplementation {
 public:
 	DoubleVal(double v)
-		: DoubleValImplementation(base_type(TYPE_DOUBLE), v)
+		: Val(base_type(TYPE_DOUBLE)), detail::DoubleValImplementation(v)
 		{}
 
 	// Same as for IntVal: no Get() method needed.
@@ -431,11 +428,11 @@ public:
 #define Hours (60*Minutes)
 #define Days (24*Hours)
 
-class IntervalVal final : public DoubleValImplementation {
+class IntervalVal final : public Val, public detail::DoubleValImplementation {
 public:
 	IntervalVal(double quantity, double units = Seconds)
-		: DoubleValImplementation(base_type(TYPE_INTERVAL),
-						quantity * units)
+		: Val(base_type(TYPE_INTERVAL)),
+		  detail::DoubleValImplementation(quantity * units)
 		{}
 
 	double Get() const	{ return double_val; }
@@ -444,15 +441,16 @@ protected:
 	void ValDescribe(ODesc* d) const override;
 };
 
-class TimeVal final : public DoubleValImplementation {
+class TimeVal final : public Val, public detail::DoubleValImplementation {
 public:
-	TimeVal(double t) : DoubleValImplementation(base_type(TYPE_TIME), t)
+	TimeVal(double t) : Val(base_type(TYPE_TIME)),
+	                    detail::DoubleValImplementation(t)
 		{}
 
 	double Get() const	{ return double_val; }
 };
 
-class PortVal final : public UnsignedValImplementation {
+class PortVal final : public Val, public detail::UnsignedValImplementation {
 public:
 	ValPtr SizeVal() const override;
 
@@ -1314,7 +1312,7 @@ private:
 	std::vector<ValPtr>* record_val;
 };
 
-class EnumVal final : public IntValImplementation {
+class EnumVal final : public Val, public detail::IntValImplementation {
 public:
 	ValPtr SizeVal() const override;
 
@@ -1328,7 +1326,7 @@ protected:
 	friend IntrusivePtr<T> make_intrusive(Ts&&... args);
 
 	EnumVal(EnumTypePtr t, bro_int_t i)
-		: IntValImplementation(std::move(t), i)
+		: Val(std::move(t)), detail::IntValImplementation(i)
 		{}
 
 	void ValDescribe(ODesc* d) const override;
@@ -1483,11 +1481,11 @@ private:
 	inline ctype Val::name() const \
 		{ return dynamic_cast<const ztype*>(this)->Get(); }
 
-UNDERLYING_ACCESSOR_DEF(IntValImplementation, bro_int_t, AsInt)
+UNDERLYING_ACCESSOR_DEF(detail::IntValImplementation, bro_int_t, AsInt)
 UNDERLYING_ACCESSOR_DEF(BoolVal, bool, AsBool)
 UNDERLYING_ACCESSOR_DEF(EnumVal, int, AsEnum)
-UNDERLYING_ACCESSOR_DEF(UnsignedValImplementation, bro_uint_t, AsCount)
-UNDERLYING_ACCESSOR_DEF(DoubleValImplementation, double, AsDouble)
+UNDERLYING_ACCESSOR_DEF(detail::UnsignedValImplementation, bro_uint_t, AsCount)
+UNDERLYING_ACCESSOR_DEF(detail::DoubleValImplementation, double, AsDouble)
 UNDERLYING_ACCESSOR_DEF(TimeVal, double, AsTime)
 UNDERLYING_ACCESSOR_DEF(IntervalVal, double, AsInterval)
 UNDERLYING_ACCESSOR_DEF(SubNetVal, const IPPrefix&, AsSubNet)
