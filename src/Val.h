@@ -1460,6 +1460,15 @@ public:
 	bool Insert(unsigned int index, Val* element)
 		{ return Insert(index, {AdoptRef{}, element}); }
 
+	/**
+	 * Inserts an element at the end of the vector.
+	 * @param element  The value to insert into the vector.
+	 * @return  True if the element was inserted or false if the element was
+	 * the wrong type.
+	 */
+	bool Append(ValPtr element)
+		{ return Insert(Size(), element); }
+
 	// Removes an element at a specific position.
 	bool Remove(unsigned int index);
 
