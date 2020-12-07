@@ -54,7 +54,7 @@ get_filename_component(ZEEK_SCRIPT_INSTALL_PATH ${ZEEK_SCRIPT_INSTALL_PATH}
     ABSOLUTE)
 
 set(BRO_PLUGIN_INSTALL_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/zeek/plugins CACHE STRING "Installation path for plugins" FORCE)
-set(PY_MOD_INSTALL_DIR ${CMAKE_INSTALL_FULL_LIBDIR}/zeekctl CACHE STRING "Installation path for Python modules" FORCE)
+set(PY_MOD_INSTALL_DIR ${CMAKE_INSTALL_FULL_LIBDIR}/python CACHE STRING "Installation path for Python modules" FORCE)
 
 configure_file(zeek-path-dev.in ${CMAKE_CURRENT_BINARY_DIR}/zeek-path-dev)
 execute_process(COMMAND "${CMAKE_COMMAND}" -E create_symlink
@@ -503,6 +503,25 @@ InstallShellScript("bin" "zeek-wrapper.in" "zeek-wrapper")
 InstallSymlink("${CMAKE_INSTALL_PREFIX}/bin/zeek-wrapper" "${CMAKE_INSTALL_PREFIX}/bin/bro-config")
 
 ########################################################################
+## zkg configuration
+
+if ( INSTALL_ZKG )
+    # We will install zkg. Using a subdirectory in etc/ for zkg's
+    # config file simplifies sticking with "config" as the config
+    # file's name.
+    set(ZEEK_ZKG_CONFIG_DIR "${ZEEK_ETC_INSTALL_DIR}/zkg")
+    set(ZEEK_ZKG_STATE_DIR "${ZEEK_ROOT_DIR}/var/lib/zkg")
+
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/zkg-config.in
+        ${CMAKE_CURRENT_BINARY_DIR}/zkg-config @ONLY)
+
+    install(DIRECTORY DESTINATION var/lib/zkg)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zkg-config
+        DESTINATION ${ZEEK_ZKG_CONFIG_DIR} RENAME config)
+endif ()
+
+########################################################################
 ## Recurse on sub-directories
 
 add_subdirectory(src)
@@ -511,6 +530,7 @@ add_subdirectory(man)
 
 include(CheckOptionalBuildSources)
 
+CheckOptionalBuildSources(auxil/package-manager ZKG INSTALL_ZKG)
 CheckOptionalBuildSources(auxil/zeekctl   ZeekControl INSTALL_ZEEKCTL)
 CheckOptionalBuildSources(auxil/zeek-aux  Zeek-Aux  INSTALL_AUX_TOOLS)
 CheckOptionalBuildSources(auxil/zeek-archiver ZeekArchiver INSTALL_ZEEK_ARCHIVER)
@@ -535,7 +555,7 @@ endif ()
 ########################################################################
 ## Packaging Setup
 
-if (INSTALL_ZEEKCTL)
+if ( INSTALL_ZEEKCTL OR INSTALL_ZKG )
     # CPack RPM Generator may not automatically detect this
     set(CPACK_RPM_PACKAGE_REQUIRES "python >= ${ZEEK_PYTHON_MIN}")
 endif ()
@@ -573,6 +593,7 @@ message(
     "\n"
     "\nZeekControl:       ${INSTALL_ZEEKCTL}"
     "\nAux. Tools:        ${INSTALL_AUX_TOOLS}"
+    "\nzkg:               ${INSTALL_ZKG}"
     "\n"
     "\nlibmaxminddb:      ${USE_GEOIP}"
     "\nKerberos:          ${USE_KRB5}"
